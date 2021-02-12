@@ -30,11 +30,18 @@
     
             int i = 0;
             while (!(cf.isCancelled() || cf.isCompletedExceptionally() || cf.isDone())) {
-                client.sendText("Hello World: " + i);
-                if (i++ == 2) {
-                    client.close();
+                String payload = "Hello World: " + i;
+                if (i == 1) {
+                    client.ping(payload.getBytes());
+                } else if (i == 2) {
+                    client.sendBinary(payload.getBytes());
+                } else if (i == 5) {
+                    client.disconnect();
+                } else {
+                    client.sendText(payload);
                 }
                 Thread.sleep(1_000);
+                i++;
             }
             System.out.println("Exiting ...");
         }
@@ -45,20 +52,20 @@
             // Configure socket here if needed
         }
     
-    @Override
-    public void onData(boolean finalFragment, byte[] payload) {
-        try {
-            aggregatedData.write(payload);
-        } catch (IOException exception) {
-            exception.printStackTrace();
-        } finally {
-            if (finalFragment) {
-                LOGGER.info("DATA -> Final: {}, Payload: {}", finalFragment, new String(aggregatedData.toByteArray()));
-                aggregatedData.reset();
+        @Override
+        public void onData(boolean finalFragment, byte[] payload) {
+            try {
+                aggregatedData.write(payload);
+            } catch (IOException exception) {
+                exception.printStackTrace();
+            } finally {
+                if (finalFragment) {
+                    LOGGER.info("DATA -> Final: {}, Payload: {}", finalFragment, new String(aggregatedData.toByteArray()));
+                    aggregatedData.reset();
+                }
             }
         }
-    }
-
+    
         @Override
         public void onPing(boolean finalFragment, byte[] payload) {
             LOGGER.info("PING -> Final: {}, Payload: {}", finalFragment, new String(payload));

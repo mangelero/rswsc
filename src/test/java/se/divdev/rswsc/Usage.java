@@ -15,8 +15,7 @@ public class Usage implements WebSocketEvent {
     private static final Logger LOGGER = LoggerFactory.getLogger(Usage.class);
 
     public static void main(String... args) throws URISyntaxException, IOException, InterruptedException {
-        URI uri = new URI("ws://localhost:8080/");
-        //URI uri = new URI("ws://echo.websocket.org/");
+        URI uri = new URI("ws://echo.websocket.org/");
         //URI uri = new URI("wss://echo.websocket.org/");
 
         Usage usage = new Usage();

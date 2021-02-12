@@ -47,7 +47,7 @@ public class Server {
 
         for (int i = 0; i < 10; i++) {
             byte[] headerBytes = new byte[65535];
-            inputStream.read(headerBytes);
+            int read = inputStream.read(headerBytes);
             WebSocketFrame webSocketFrame = WebSocketFrame.incoming(headerBytes);
 
             System.out.println("Got frame: " + webSocketFrame);

@@ -8,11 +8,13 @@ import javax.net.ssl.SSLSocketFactory;
 import java.io.*;
 import java.net.Socket;
 import java.net.URI;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -28,7 +30,7 @@ public class RswsClient implements Closeable {
 
     private final URI uri;
 
-    private final ExecutorService executorService;
+    private final ScheduledExecutorService executorService;
 
     private final WebSocketEvent eventHandler;
 
@@ -42,6 +44,8 @@ public class RswsClient implements Closeable {
 
     private final Map<String, String> headers;
 
+    private final Duration pingInterval;
+
     private volatile boolean running = true;
 
     private IO io;
@@ -49,14 +53,15 @@ public class RswsClient implements Closeable {
     private final int port;
 
     RswsClient(final URI uri,
-               final ExecutorService executorService,
+               final ScheduledExecutorService executorService,
                final WebSocketEvent eventHandler,
                final boolean autoRespondToPing,
                final int maxFrameSize,
                final Supplier<SSLSocketFactory> sslSocketFactorySupplier,
                final String httpVersion,
                final Map<String, String> headers,
-               final int port) {
+               final int port,
+               final Duration pingInterval) {
         this.uri = uri;
         this.executorService = executorService;
         this.eventHandler = eventHandler;
@@ -66,6 +71,7 @@ public class RswsClient implements Closeable {
         this.httpVersion = httpVersion;
         this.headers = headers;
         this.port = port;
+        this.pingInterval = pingInterval;
     }
 
     public void disconnect() throws IOException {
@@ -109,13 +115,21 @@ public class RswsClient implements Closeable {
             io.commit();
 
             readAndValidateInitialResponse();
-
+            enablePing();
             return this;
         } catch (Exception e) {
             LOGGER.error("Error connecting to {}", uri, e);
             close();
             throw new IOException(e);
         }
+    }
+
+    private void enablePing() {
+        if (pingInterval == null) {
+            LOGGER.info("No ping interval specified");
+            return;
+        }
+        executorService.scheduleWithFixedDelay(this::ping, pingInterval.toMillis(), pingInterval.toMillis(), TimeUnit.MILLISECONDS);
     }
 
     public RswsClient configureSocket(final Consumer<Socket> socketConsumer) {
@@ -204,6 +218,14 @@ public class RswsClient implements Closeable {
             }
         } finally {
             IO.close(this);
+        }
+    }
+
+    private void ping() {
+        try {
+            ping(new byte[0]);
+        } catch (IOException exception) {
+            LOGGER.error("Error sending ping", exception);
         }
     }
 

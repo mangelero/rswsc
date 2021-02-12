@@ -6,7 +6,7 @@ import java.util.Arrays;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
 
-class WebSocketFrame {
+public class WebSocketFrame {
 
     private static final Random RANDOM = new Random();
 
@@ -77,7 +77,7 @@ class WebSocketFrame {
             System.arraycopy(frameData, index.getAndAdd(this.mask.length), this.mask, 0, this.mask.length);
         }
 
-        byte[] maskedPayload = new byte[frameData.length - index.get()];
+        byte[] maskedPayload = new byte[Math.min(frameData.length - index.get(), (int) payloadSize())];
         System.arraycopy(frameData, index.get(), maskedPayload, 0, maskedPayload.length);
 
         this.payload = process(maskedPayload, 0);
@@ -86,19 +86,25 @@ class WebSocketFrame {
         }
     }
 
-     static WebSocketFrame incoming(final byte[] frameData) throws IOException {
+    public static WebSocketFrame incoming(final byte[] frameData) throws IOException {
         return new WebSocketFrame(frameData);
     }
 
-     static WebSocketFrame outgoing(final OpCode opCode) throws IOException {
+    public static WebSocketFrame outgoing(final OpCode opCode) throws IOException {
+        return outgoing(opCode, true);
+    }
+
+    public static WebSocketFrame outgoing(final OpCode opCode, final boolean masked) throws IOException {
         byte[] initial = new byte[6];
         Arrays.fill(initial, (byte) 0x0);
 
-        // Enable masking
-        initial[1] = BitUtils.enableBit(initial[1], 7);
-        byte[] mask = new byte[4];
-        RANDOM.nextBytes(mask);
-        System.arraycopy(mask, 0, initial, 2, mask.length);
+        if (masked) {
+            // Enable masking
+            initial[1] = BitUtils.enableBit(initial[1], 7);
+            byte[] mask = new byte[4];
+            RANDOM.nextBytes(mask);
+            System.arraycopy(mask, 0, initial, 2, mask.length);
+        }
 
         boolean[] opCodeBytes = BitUtils.decode(opCode.value);
         for (int i = 0; i < 4; i++) {
@@ -112,11 +118,11 @@ class WebSocketFrame {
         return BitUtils.extract(headerBytes[0], 4, 4);
     }
 
-     OpCode getOpCode() {
+    OpCode getOpCode() {
         return OpCode.fromValue(getOpCodeValue());
     }
 
-     long payloadSize() {
+    long payloadSize() {
         int length = getLength();
         if (length < 126) {
             return length;
@@ -129,7 +135,7 @@ class WebSocketFrame {
      *
      * @return number of bytes
      */
-     long additionalBytesToRead() {
+    long additionalBytesToRead() {
         return payloadSize() - this.payload.length;
     }
 
@@ -160,7 +166,7 @@ class WebSocketFrame {
         return result;
     }
 
-     boolean isMasked() {
+    boolean isMasked() {
         return BitUtils.getBit(headerBytes[1], 7);
     }
 
@@ -172,7 +178,7 @@ class WebSocketFrame {
         return BitUtils.getBit(headerBytes[0], 7);
     }
 
-     boolean isConnectionClose() {
+    boolean isConnectionClose() {
         return getOpCode() == OpCode.CONNECTION_CLOSE;
     }
 
@@ -184,7 +190,7 @@ class WebSocketFrame {
         return getOpCode() == OpCode.PONG;
     }
 
-    byte[] build(final boolean finalFrame, final byte... payload) throws IOException {
+    public byte[] build(final boolean finalFrame, final byte... payload) throws IOException {
 
         byte[] headerBytes = Arrays.copyOf(this.headerBytes, this.headerBytes.length);
 

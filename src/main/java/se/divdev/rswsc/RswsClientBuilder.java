@@ -2,10 +2,12 @@ package se.divdev.rswsc;
 
 import javax.net.ssl.SSLSocketFactory;
 import java.net.URI;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadFactory;
 import java.util.function.Supplier;
 
 import static se.divdev.rswsc.WebSocketUtils.SEC_WEBSOCKET_KEY_HEADER;
@@ -18,7 +20,7 @@ public class RswsClientBuilder {
 
     private final URI uri;
 
-    private final ExecutorService executorService;
+    private final ScheduledExecutorService executorService;
 
     private final WebSocketEvent eventHandler;
 
@@ -32,14 +34,17 @@ public class RswsClientBuilder {
 
     private final Map<String, String> headers;
 
+    private final Duration pingInterval;
+
     private RswsClientBuilder(final URI uri,
-                              final ExecutorService executorService,
+                              final ScheduledExecutorService executorService,
                               final WebSocketEvent eventHandler,
                               final boolean autoRespondToPing,
                               final int maxFrameSize,
                               final Supplier<SSLSocketFactory> sslSocketFactorySupplier,
                               final String httpVersion,
-                              final Map<String, String> headers) {
+                              final Map<String, String> headers,
+                              final Duration pingInterval) {
         this.uri = uri;
         this.executorService = executorService;
         this.eventHandler = eventHandler;
@@ -48,6 +53,7 @@ public class RswsClientBuilder {
         this.sslSocketFactorySupplier = sslSocketFactorySupplier;
         this.httpVersion = httpVersion;
         this.headers = headers;
+        this.pingInterval = pingInterval;
     }
 
     private int getPort() {
@@ -67,46 +73,57 @@ public class RswsClientBuilder {
     }
 
     public static RswsClientBuilder newBuilder(final URI uri) {
+        ThreadFactory defaultThreadFactory = r -> {
+            Thread thread = new Thread(r);
+            thread.setDaemon(true);
+            return thread;
+        };
+
         RswsClientBuilder builder = new RswsClientBuilder(
                 uri,
-                Executors.newFixedThreadPool(2),
+                Executors.newScheduledThreadPool(2, defaultThreadFactory),
                 null,
                 true,
                 DEFAULT_MAX_FRAME_SIZE,
                 DEFAULT_SSL_FACTORY,
                 DEFAULT_HTTP_VERSION,
-                new LinkedHashMap<>()
+                new LinkedHashMap<>(),
+                null
         );
 
         return builder.withHeader("User-Agent", "rswsc/1.0.0");
     }
 
     public RswsClientBuilder withUri(final URI uri) {
-        return new RswsClientBuilder(uri, executorService, eventHandler, autoRespondToPing, maxFrameSize, sslSocketFactorySupplier, httpVersion, headers);
+        return new RswsClientBuilder(uri, executorService, eventHandler, autoRespondToPing, maxFrameSize, sslSocketFactorySupplier, httpVersion, headers, pingInterval);
     }
 
-    public RswsClientBuilder withExecutorService(final ExecutorService executorService) {
-        return new RswsClientBuilder(uri, executorService, eventHandler, autoRespondToPing, maxFrameSize, sslSocketFactorySupplier, httpVersion, headers);
+    public RswsClientBuilder withExecutorService(final ScheduledExecutorService executorService) {
+        return new RswsClientBuilder(uri, executorService, eventHandler, autoRespondToPing, maxFrameSize, sslSocketFactorySupplier, httpVersion, headers, pingInterval);
     }
 
     public RswsClientBuilder withEventHandler(final WebSocketEvent eventHandler) {
-        return new RswsClientBuilder(uri, executorService, eventHandler, autoRespondToPing, maxFrameSize, sslSocketFactorySupplier, httpVersion, headers);
+        return new RswsClientBuilder(uri, executorService, eventHandler, autoRespondToPing, maxFrameSize, sslSocketFactorySupplier, httpVersion, headers, pingInterval);
     }
 
     public RswsClientBuilder withAutoRespondToPing(final boolean autoRespondToPing) {
-        return new RswsClientBuilder(uri, executorService, eventHandler, autoRespondToPing, maxFrameSize, sslSocketFactorySupplier, httpVersion, headers);
+        return new RswsClientBuilder(uri, executorService, eventHandler, autoRespondToPing, maxFrameSize, sslSocketFactorySupplier, httpVersion, headers, pingInterval);
     }
 
     public RswsClientBuilder withMaxFrameSize(final int maxFrameSize) {
-        return new RswsClientBuilder(uri, executorService, eventHandler, autoRespondToPing, maxFrameSize, sslSocketFactorySupplier, httpVersion, headers);
+        return new RswsClientBuilder(uri, executorService, eventHandler, autoRespondToPing, maxFrameSize, sslSocketFactorySupplier, httpVersion, headers, pingInterval);
     }
 
     public RswsClientBuilder withSslSocketFactorySupplier(final Supplier<SSLSocketFactory> sslSocketFactorySupplier) {
-        return new RswsClientBuilder(uri, executorService, eventHandler, autoRespondToPing, maxFrameSize, sslSocketFactorySupplier, httpVersion, headers);
+        return new RswsClientBuilder(uri, executorService, eventHandler, autoRespondToPing, maxFrameSize, sslSocketFactorySupplier, httpVersion, headers, pingInterval);
     }
 
     public RswsClientBuilder withHttpVersion(final String httpVersion) {
-        return new RswsClientBuilder(uri, executorService, eventHandler, autoRespondToPing, maxFrameSize, sslSocketFactorySupplier, httpVersion, headers);
+        return new RswsClientBuilder(uri, executorService, eventHandler, autoRespondToPing, maxFrameSize, sslSocketFactorySupplier, httpVersion, headers, pingInterval);
+    }
+
+    public RswsClientBuilder withPingInterval(final Duration pingInterval) {
+        return new RswsClientBuilder(uri, executorService, eventHandler, autoRespondToPing, maxFrameSize, sslSocketFactorySupplier, httpVersion, headers, pingInterval);
     }
 
     public RswsClientBuilder withHeader(final String key, final String value) {
@@ -132,7 +149,8 @@ public class RswsClientBuilder {
                 sslSocketFactorySupplier,
                 httpVersion,
                 headers,
-                getPort()
+                getPort(),
+                pingInterval
         );
     }
 }
